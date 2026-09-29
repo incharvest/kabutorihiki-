@@ -39,7 +39,7 @@ def trendline(pts, n_bars_idx):
 
 def report(sym):
     raw = load(sym)
-    raw = raw[raw["volume"] > 0] if not sym.startswith("^") else raw
+    raw = raw[raw["volume"] > 0] if (raw["volume"] > 0).mean() > 0.9 else raw  # 指数・為替は出来高0のため除外しない
     df = enrich(raw); L = df.iloc[-1]; c = L.close
     w = weekly(raw); wc = w["close"]
     w["ma13"], w["ma26"], w["ma52"] = wc.rolling(13).mean(), wc.rolling(26).mean(), wc.rolling(52).mean()
