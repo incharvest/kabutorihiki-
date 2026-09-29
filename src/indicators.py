@@ -4,10 +4,29 @@ from pathlib import Path
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
+SPLIT_RATIOS = (1.5, 2, 2.5, 3, 4, 5, 8, 10, 15, 20, 25, 50, 100)
+
+def adjust_splits(df):
+    """Yahoo が株式分割を調整し忘れた系列を補正する。
+    前日終値÷当日始値が一般的な分割比率（±8%）に一致し、かつ30%超の変化なら分割とみなし、それ以前のOHLCを割り戻す。"""
+    df = df.copy(); o, pc = df["open"], df["close"].shift()
+    for i in range(1, len(df)):
+        r = pc.iloc[i] / o.iloc[i]
+        if not (r > 1.3 or r < 1 / 1.3) or np.isnan(r): continue
+        k = r if r > 1 else 1 / r
+        m = min(SPLIT_RATIOS, key=lambda x: abs(k / x - 1))
+        if abs(k / m - 1) > 0.08: continue
+        f = m if r > 1 else 1 / m
+        idx = df.index[:i]
+        df.loc[idx, ["open", "high", "low", "close"]] /= f
+        df.loc[idx, "volume"] *= f
+    return df
+
 def load(symbol):
     p = DATA / f"{symbol.replace('^','IDX_').replace('=','_')}.csv"
     df = pd.read_csv(p, parse_dates=["date"]).set_index("date")
-    return df[df["close"].notna()]
+    df = df[df["close"].notna()]
+    return df if symbol.startswith("^") or "=" in symbol else adjust_splits(df)
 
 def rsi(s, n=14):
     d = s.diff(); up = d.clip(lower=0); dn = -d.clip(upper=0)
